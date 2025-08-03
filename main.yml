@@ -63,13 +63,17 @@ Resources:
       VpcId: !Ref MyVPC
       InternetGatewayId: !Ref MyInternetGateway
 
-  MySubnet:
+   MySubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref MyVPC
       CidrBlock: !Ref SubnetCIDR
       MapPublicIpOnLaunch: true
-      AvailabilityZone: !Select [0, !GetAZs !Ref "AWS::Region"]
+      AvailabilityZone:
+        !Select
+          - 0
+          - !GetAZs 
+              Ref: AWS::Region
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-PublicSubnet"
