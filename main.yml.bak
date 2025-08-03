@@ -1,10 +1,11 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: EC2 instance with VPC, SG, public subnet
+AWSTemplateFormatVersion: "2010-09-09"
+Description: EC2 instance in a public subnet with security group and VPC
 
 Parameters:
-  InstanceType:
-    Type: String
-    Default: t2.micro
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: devOps
 
 Resources:
   MyVPC:
@@ -17,45 +18,49 @@ Resources:
         - Key: Name
           Value: MyVPC
 
-  InternetGateway:
+  MyInternetGateway:
     Type: AWS::EC2::InternetGateway
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref MyVPC
-      InternetGatewayId: !Ref InternetGateway
+      InternetGatewayId: !Ref MyInternetGateway
 
-  PublicSubnet:
+  MySubnet:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref MyVPC
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
+      AvailabilityZone: us-east-1a
+      Tags:
+        - Key: Name
+          Value: MySubnet
 
-  RouteTable:
+  MyRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MyVPC
 
-  PublicRoute:
+  MyRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
     Properties:
-      RouteTableId: !Ref RouteTable
+      RouteTableId: !Ref MyRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
+      GatewayId: !Ref MyInternetGateway
 
   RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref MySubnet
+      RouteTableId: !Ref MyRouteTable
 
   MySecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow SSH and Ping
+      GroupDescription: Allow SSH and ICMP
       VpcId: !Ref MyVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -70,16 +75,21 @@ Resources:
   MyEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: !Ref InstanceType
-      ImageId: ami-0fc5d935ebf8bc3bc  # Amazon Linux 2 (us-east-1)
-      SubnetId: !Ref PublicSubnet
-      SecurityGroupIds:
-        - !Ref MySecurityGroup
-      KeyName: YOUR_KEY_PAIR_NAME
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      ImageId: ami-0c101f26f147fa7fd # Amazon Linux 2023 AMI (us-east-1)
+      NetworkInterfaces:
+        - AssociatePublicIpAddress: true
+          DeviceIndex: 0
+          SubnetId: !Ref MySubnet
+          GroupSet:
+            - !Ref MySecurityGroup
       Tags:
         - Key: Name
-          Value: MyEC2
+          Value: MyEC2Instance
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          ping -c 4 google.com > /home/ec2-user/ping.log
+          yum update -y
+          yum install -y curl
+          ping -c 3 google.com
