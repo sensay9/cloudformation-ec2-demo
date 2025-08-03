@@ -7,19 +7,55 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
     Default: Mumbai-Instance
 
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t3.micro
+      - t3.small
+    ConstraintDescription: Must be a valid EC2 instance type.
+
+  VpcCIDR:
+    Description: CIDR block for the VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  SubnetCIDR:
+    Description: CIDR block for the public subnet
+    Type: String
+    Default: 10.0.1.0/24
+
+Mappings:
+  RegionMap:
+    ap-south-1:
+      AMI: ami-0f58b397bc5c1f2e8
+    us-east-1:
+      AMI: ami-0d0ad8bb301edb745
+    us-west-1:
+      AMI: ami-06ca3ca175f37dd66
+    eu-west-1:
+      AMI: ami-07a3f215cc90c889c
+
 Resources:
   MyVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/16
+      CidrBlock: !Ref VpcCIDR
       EnableDnsSupport: true
       EnableDnsHostnames: true
       Tags:
         - Key: Name
-          Value: MyVPC
+          Value: !Sub "${AWS::StackName}-VPC"
 
   MyInternetGateway:
     Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-IGW"
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -31,17 +67,20 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref MyVPC
-      CidrBlock: 10.0.1.0/24
+      CidrBlock: !Ref SubnetCIDR
       MapPublicIpOnLaunch: true
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs !Ref "AWS::Region"]
       Tags:
         - Key: Name
-          Value: MySubnet
+          Value: !Sub "${AWS::StackName}-PublicSubnet"
 
   MyRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-RouteTable"
 
   MyRoute:
     Type: AWS::EC2::Route
@@ -71,13 +110,19 @@ Resources:
           FromPort: -1
           ToPort: -1
           CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-SG"
 
   MyEC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      InstanceType: t2.micro
+      InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
-      ImageId: ami-0d0ad8bb301edb745 # Amazon Linux 2023 AMI (us-east-1)
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref "AWS::Region"
+        - AMI
       NetworkInterfaces:
         - AssociatePublicIpAddress: true
           DeviceIndex: 0
@@ -86,7 +131,7 @@ Resources:
             - !Ref MySecurityGroup
       Tags:
         - Key: Name
-          Value: MyEC2Instance
+          Value: !Sub "${AWS::StackName}-EC2"
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash

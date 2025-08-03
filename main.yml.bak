@@ -33,7 +33,7 @@ Resources:
       VpcId: !Ref MyVPC
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
-      AvailabilityZone: us-east-1a
+      AvailabilityZone: !Select [0, !GetAZs !Ref "AWS::Region"]
       Tags:
         - Key: Name
           Value: MySubnet
